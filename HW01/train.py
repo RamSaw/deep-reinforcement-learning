@@ -24,17 +24,16 @@ class AQL:
         self.gamma = GAMMA ** N_STEP
         from HW01.agent import Agent
         self.agent = Agent()
+        self.cur = 0
 
     def update(self, transition):
         state, action, next_state, reward, done = transition
 
     def act(self, state, target=False):
-        return 0
+        return self.agent.act(state)
 
     def save(self, path):
-        weight = self.agent.weight
-        bias = self.agent.bias
-        np.savez(os.path.join(path, "agent.npz"), weight=weight, bias=bias)
+        torch.save(self.agent.q_learning_net.state_dict(), self.agent.agent_filepath)
 
 
 if __name__ == "__main__":
