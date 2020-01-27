@@ -1,12 +1,10 @@
-import os
+import random
+from collections import deque
 
-from gym import make
 import numpy as np
 import torch
-import copy
-from collections import deque
-import random
-
+from gym import make
+from torch import optim, nn
 
 N_STEP = 3
 GAMMA = 0.96
@@ -25,12 +23,21 @@ class AQL:
         from HW01.agent import Agent
         self.agent = Agent()
         self.cur = 0
+        self.optimizer = optim.Adam(self.agent.q_learning_net.parameters(), lr=0.00001)
+        self.loss_function = nn.MSELoss()
 
     def update(self, transition):
+        self.optimizer.zero_grad()
+
         state, action, next_state, reward, done = transition
+        target = reward + self.gamma * self.agent.act(next_state)
+        output = self.agent.q_learning_net(torch.tensor(transform_state(state), requires_grad=True).float())[action]
+        loss = self.loss_function(output.float(), target)
+        loss.backward()
+        self.optimizer.step()
 
     def act(self, state, target=False):
-        return self.agent.act(state)
+        return self.agent.act(state).item()
 
     def save(self, path):
         torch.save(self.agent.q_learning_net.state_dict(), self.agent.agent_filepath)
@@ -42,6 +49,8 @@ if __name__ == "__main__":
     eps = 0.1
     episodes = 2000
 
+    scores = []
+    best_score = -201.0
     for i in range(episodes):
         state = transform_state(env.reset())
         total_reward = 0
@@ -65,12 +74,17 @@ if __name__ == "__main__":
             if len(reward_buffer) == N_STEP:
                 aql.update((state_buffer[0], action_buffer[0], next_state, sum([(GAMMA ** i) * r for i, r in enumerate(reward_buffer)]), done))
             state = next_state
-            env.render()
-        print(f'Score: {-steps}')
+            #env.render()
+        scores.append(-steps)
         if len(reward_buffer) == N_STEP:
             rb = list(reward_buffer)
             for k in range(1, N_STEP):
                 aql.update((state_buffer[k], action_buffer[k], next_state, sum([(GAMMA ** i) * r for i, r in enumerate(rb[k:])]), done))
 
-        if i % 20 == 0:
-            aql.save(__file__[:-8])
+        if (i + 1) % 20 == 0:
+            current_score = np.mean(scores)
+            print(f'Current score: {current_score}')
+            scores = []
+            if current_score > best_score:
+                best_score = current_score
+                aql.save(__file__[:-8])

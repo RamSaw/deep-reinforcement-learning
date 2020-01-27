@@ -25,17 +25,15 @@ make_reproducible(SEED, False)
 class Agent:
     def __init__(self):
         self.agent_filepath = __file__[:-8] + "agent.pt"
-        self.q_learning_net = nn.Sequential(
-            nn.Linear(in_features=2, out_features=3, bias=True)
-        )
-        if not os.path.exists(self.agent_filepath):
-            torch.save(self.q_learning_net.state_dict(), self.agent_filepath)
+        self.q_learning_net = nn.Linear(in_features=2, out_features=3, bias=True)
+        #if not os.path.exists(self.agent_filepath):
+        #    torch.save(self.q_learning_net.state_dict(), self.agent_filepath)
         self.q_learning_net.load_state_dict(torch.load(self.agent_filepath))
         self.q_learning_net.train()  # TODO: set to eval
 
     def act(self, state):
         transformed_state = torch.tensor(transform_state(state)).float()
-        return torch.argmax(self.q_learning_net(transformed_state)).item()
+        return torch.argmax(self.q_learning_net(transformed_state))
 
     def reset(self):
         pass
