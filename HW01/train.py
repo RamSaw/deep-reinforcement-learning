@@ -23,9 +23,9 @@ class AQL:
         self.optimizer.zero_grad()
 
         state, action, next_state, reward, done = transition
-        target = reward + self.gamma * self.agent.act(next_state)
-        from HW01.agent import transform_state
-        output = self.agent.q_learning_net(torch.tensor(transform_state(transform_state(state)), requires_grad=True).float())[action]
+        next_state_action = self.agent.act(next_state)
+        target = reward + self.gamma * next_state_action
+        output = self.agent.forward(state)[action]
         loss = self.loss_function(output, torch.tensor(target))
         loss.backward()
         self.optimizer.step()

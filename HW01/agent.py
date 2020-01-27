@@ -21,22 +21,28 @@ make_reproducible(SEED, False)
 
 
 def transform_state(state):
-    state = (np.array(state) + np.array((1.2, 0.0))) / np.array((1.8, 0.07))
-    result = []
-    result.extend(state)
-    return np.array(result)
+    state = (torch.tensor(state, requires_grad=True).float() + torch.tensor([1.2, 0.0])) / torch.tensor([1.8, 0.07])
+    return state
+
+
+def transform_state_tensor(state):
+    state = (state + torch.tensor([1.2, 0.0])) / torch.tensor([1.8, 0.07])
+    return state
 
 
 class Agent:
     def __init__(self):
         self.agent_filepath = __file__[:-8] + "agent.pt"
         self.q_learning_net = nn.Linear(in_features=2, out_features=3, bias=True)
-        #self.q_learning_net.load_state_dict(torch.load(self.agent_filepath))
+        self.q_learning_net.load_state_dict(torch.load(self.agent_filepath))
         self.q_learning_net.train()  # TODO: set to eval
 
     def act(self, state):
-        transformed_state = torch.tensor(transform_state(transform_state(state))).float()
-        return torch.argmax(self.q_learning_net(transformed_state)).item()
+        return torch.argmax(self.forward(state)).item()
+
+    def forward(self, state):
+        transformed_state = transform_state_tensor(transform_state(state))
+        return self.q_learning_net(transformed_state)
 
     def reset(self):
         pass
