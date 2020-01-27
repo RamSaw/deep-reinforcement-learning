@@ -10,13 +10,6 @@ N_STEP = 3
 GAMMA = 0.96
 
 
-def transform_state(state):
-    state = (np.array(state) + np.array((1.2, 0.0))) / np.array((1.8, 0.07))
-    result = []
-    result.extend(state)
-    return np.array(result)
-
-
 class AQL:
     def __init__(self, state_dim, action_dim):
         self.gamma = GAMMA ** N_STEP
@@ -31,13 +24,14 @@ class AQL:
 
         state, action, next_state, reward, done = transition
         target = reward + self.gamma * self.agent.act(next_state)
-        output = self.agent.q_learning_net(torch.tensor(transform_state(state), requires_grad=True).float())[action]
-        loss = self.loss_function(output.float(), target)
+        from HW01.agent import transform_state
+        output = self.agent.q_learning_net(torch.tensor(transform_state(transform_state(state)), requires_grad=True).float())[action]
+        loss = self.loss_function(output, torch.tensor(target))
         loss.backward()
         self.optimizer.step()
 
     def act(self, state, target=False):
-        return self.agent.act(state).item()
+        return self.agent.act(state)
 
     def save(self, path):
         torch.save(self.agent.q_learning_net.state_dict(), self.agent.agent_filepath)
@@ -52,7 +46,7 @@ if __name__ == "__main__":
     scores = []
     best_score = -201.0
     for i in range(episodes):
-        state = transform_state(env.reset())
+        state = env.reset()
         total_reward = 0
         steps = 0
         done = False
@@ -65,7 +59,7 @@ if __name__ == "__main__":
             else:
                 action = aql.act(state)
             next_state, reward, done, _ = env.step(action)
-            next_state = transform_state(next_state)
+            next_state = next_state
             total_reward += reward
             steps += 1
             reward_buffer.append(reward)
