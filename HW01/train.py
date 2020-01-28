@@ -2,18 +2,21 @@ import random
 from collections import deque
 
 import numpy as np
+import sklearn.preprocessing
 import torch
 from gym import make
 from torch import optim, nn
 
-N_STEP = 3
+from HW01.agent_train import transform_state
+
+N_STEP = 1
 GAMMA = 0.96
 
 
 class AQL:
     def __init__(self, state_dim, action_dim):
         self.gamma = GAMMA ** N_STEP
-        from HW01.agent import Agent
+        from HW01.agent_train import Agent
         self.agent = Agent()
         self.cur = 0
         self.optimizer = optim.Adam(self.agent.q_learning_net.parameters(), lr=0.00001)
@@ -23,10 +26,13 @@ class AQL:
         self.optimizer.zero_grad()
 
         state, action, next_state, reward, done = transition
-        next_state_action = self.agent.act(next_state)
-        target = reward + self.gamma * next_state_action
+        q_next_state = self.agent.forward(next_state)
+        next_state_transformed = transform_state(next_state)
+        state_transformed = transform_state(state)
+        modified_reward = reward + 300 * (self.gamma * abs(next_state_transformed[1]) - abs(state_transformed[1]))
+        target = modified_reward + self.gamma * int(not done) * torch.max(q_next_state)
         output = self.agent.forward(state)[action]
-        loss = self.loss_function(output, torch.tensor(target))
+        loss = self.loss_function(output, target.detach())
         loss.backward()
         self.optimizer.step()
 
@@ -40,11 +46,22 @@ class AQL:
 if __name__ == "__main__":
     env = make("MountainCar-v0")
     aql = AQL(state_dim=2, action_dim=3)
-    eps = 0.1
+    max_eps = 0.5
+    min_eps = 0.1
     episodes = 2000
-
+               #200000
+    max_steps =  50000
+    total_steps = 0
     scores = []
     best_score = -201.0
+
+
+    observation_examples = np.array([env.observation_space.sample() for x in range(10000)])
+    scaler = sklearn.preprocessing.StandardScaler()
+    scaler.fit(observation_examples)
+    print(scaler.mean_)
+    print(scaler.var_)
+
     for i in range(episodes):
         state = env.reset()
         total_reward = 0
@@ -54,11 +71,13 @@ if __name__ == "__main__":
         state_buffer = deque(maxlen=N_STEP)
         action_buffer = deque(maxlen=N_STEP)
         while not done:
+            eps = max_eps - (max_eps - min_eps) * min(total_steps, max_steps) / max_steps
             if random.random() < eps:
                 action = env.action_space.sample()
             else:
                 action = aql.act(state)
             next_state, reward, done, _ = env.step(action)
+            total_steps += 1
             next_state = next_state
             total_reward += reward
             steps += 1

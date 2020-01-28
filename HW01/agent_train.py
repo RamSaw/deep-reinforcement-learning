@@ -35,9 +35,8 @@ def transform_state_tensor(state):
 
 class Agent:
     def __init__(self):
-        self.agent_filepath = __file__[:-8] + "agent.pt"
+        self.agent_filepath = "agent.pt"
         self.q_learning_net = nn.Linear(in_features=3, out_features=3, bias=True)
-        self.q_learning_net.load_state_dict(torch.load(self.agent_filepath))
         self.q_learning_net.train()  # TODO: set to eval
 
     def act(self, state):
