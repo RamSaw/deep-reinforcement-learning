@@ -4,7 +4,7 @@ import os
 import torch
 from torch import nn
 
-SEED = 41
+SEED = 42
 
 
 def make_reproducible(seed, make_cuda_reproducible):

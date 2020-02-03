@@ -48,9 +48,9 @@ if __name__ == "__main__":
     aql = AQL(state_dim=2, action_dim=3)
     max_eps = 0.5
     min_eps = 0.1
-    episodes = 2000
+    episodes = 5000
                #200000
-    max_steps =  50000
+    max_steps = 100000
     total_steps = 0
     scores = []
     best_score = -201.0
