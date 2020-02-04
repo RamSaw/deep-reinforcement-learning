@@ -25,15 +25,11 @@ def transform_state(state):
     return torch.tensor(state)
 
 
-def act(model, state):
-    state = transform_state(state)
-    return torch.argmax(model(state)).item()
-
-
 class Agent:
     def __init__(self):
         self.model = Agent.generate_model()
         self.model.load_state_dict(torch.load(__file__[:-8] + "/agent.pkl"))
+        self.model.to(torch.device("cpu"))
         self.model.eval()
 
     @staticmethod
@@ -51,7 +47,8 @@ class Agent:
 
     def act(self, state):
         with torch.no_grad():
-            return act(self.model, state)
+            state = transform_state(state)
+            return torch.argmax(self.model(state)).item()
 
     def reset(self):
         pass
