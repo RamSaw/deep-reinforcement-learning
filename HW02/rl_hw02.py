@@ -7,8 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1bw49IUDF69RtHLHVzaaCApKboJWD6Hjd
 """
 
-!pip install gym[box2d]
-
 import os
 import random
 
@@ -119,7 +117,7 @@ class DQN:
         self.target = Agent.generate_model().to(DEVICE)
         self.target.load_state_dict(self.model.state_dict())
         self.target.eval()
-        self.optimizer = optim.RMSprop(self.model.parameters(), lr=LR)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=LR)
         self.memory = ReplayMemory(MEMORY_CAPACITY)
 
     def optimizer_step(self):
@@ -155,8 +153,9 @@ class DQN:
         self.optimizer_step()
 
     def act(self, state, target=False):
-        state = transform_state(state).to(DEVICE)
-        return torch.argmax(self.model(state)).item()
+        with torch.no_grad():
+            state = transform_state(state).to(DEVICE)
+            return torch.argmax(self.model(state)).item()
 
     def save(self, i):
         torch.save(self.model.state_dict(), f'agent_{i}.pkl')
