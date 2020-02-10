@@ -2,12 +2,9 @@ import time
 from collections import deque
 from copy import deepcopy
 
-from gym import make
 import numpy as np
 import torch
-import random
-
-from torch.nn import functional as F
+from gym import make
 from torch import nn
 from torch.distributions import Normal
 from torch.optim import Adam
@@ -23,23 +20,11 @@ TARGET_UPDATE = 800
 EPOSIODE_LEN = 200
 
 
-class Critic(nn.Module):
-    def __init__(self, hidden=400, in_dim=3, out_dim=1):
-        super().__init__()
-        self.fc2 = nn.Linear(in_dim, hidden)
-        self.valNet = nn.Linear(hidden, 1)
-
-    def forward(self, x):
-        z = F.relu(self.fc2(x))
-        val = self.valNet(z)
-        return val
-
-
 class A2C:
     def __init__(self, state_dim, action_dim):
         self.gamma = GAMMA ** N_STEP
         self.actor = Agent.generate_model().to(DEVICE)  # Torch model
-        self.critic = Critic().to(DEVICE)  # Torch model
+        self.critic = nn.Sequential(nn.Linear(3, 256), nn.ReLU(), nn.Linear(256, 1)).to(DEVICE)  # Torch model
         self.actor_optimizer = Adam(self.actor.parameters(), lr=0.0001)
         self.critic_optimizer = Adam(self.critic.parameters(), lr=0.001)
         self.states = []

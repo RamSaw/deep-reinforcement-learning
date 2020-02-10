@@ -28,17 +28,19 @@ def transform_state(state):
 
 
 class Actor(nn.Module):
-    def __init__(self, hidden=400, in_dim=3, out_dim=1):
+    def __init__(self):
         super().__init__()
-        self.fc = nn.Linear(in_dim, hidden)
-        self.mu = nn.Linear(hidden, out_dim)
-        self.sigma = nn.Parameter(torch.full((1,), np.log(0.6)), requires_grad=True)
+        self.mu_model = nn.Sequential(
+            nn.Linear(3, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1),
+            nn.Tanh()
+        )
+        self.sigma = nn.Parameter(torch.log(torch.tensor(0.6)), requires_grad=True)
 
     def forward(self, x):
-        z2 = F.relu(self.fc(x))
-        mu = 2 * F.tanh(self.mu(z2))
-        sigma = self.sigma.expand_as(mu).exp()
-        return mu, sigma
+        mu = 2 * self.mu_model(x)
+        return mu, self.sigma
 
 
 class Agent:
