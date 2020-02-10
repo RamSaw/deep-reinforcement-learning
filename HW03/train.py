@@ -1,34 +1,117 @@
 import time
 from collections import deque
+from copy import deepcopy
 
 from gym import make
 import numpy as np
 import torch
 import random
 
+from torch.nn import functional as F
 from torch import nn
 from torch.distributions import Normal
+from torch.optim import Adam
 
 from HW03.agent import transform_state, Agent
 
 N_STEP = 64
 GAMMA = 0.9
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+UPDATE_LENGTH = 10
+ENTROPY = 0.01
+
+
+class Critic(nn.Module):
+    def __init__(self, hidden=400, in_dim=3, out_dim=1):
+        super().__init__()
+        self.fc2 = nn.Linear(in_dim, hidden)
+        self.valNet = nn.Linear(hidden, 1)
+
+    def forward(self, x):
+        z = F.relu(self.fc2(x))
+        val = self.valNet(z)
+        return val
+
 
 class A2C:
     def __init__(self, state_dim, action_dim):
         self.gamma = GAMMA ** N_STEP
         self.actor = Agent.generate_model().to(DEVICE)  # Torch model
-        self.critic = None # Torch model
+        self.critic = Critic().to(DEVICE)  # Torch model
+        self.actor_optimizer = Adam(self.actor.parameters(), lr=0.0001)
+        self.critic_optimizer = Adam(self.critic.parameters(), lr=0.001)
+        self.states = []
+        self.actions = []
+        self.next_states = []
+        self.rewards = []
+        self.log_probs = []
+        self.entropies = []
+        self.critic_values = []
+        self.target_values = []
+        self.distribution = None
+        self.target = deepcopy(self.critic)
+
+    def optimizer_step(self, log_probs, entropies, returns, critic_values):
+        self.actor_optimizer.zero_grad()
+        self.critic_optimizer.zero_grad()
+        adv = (returns - critic_values).detach()
+        policy_loss = -(log_probs * adv).mean()
+        entropy_loss = -entropies.mean() * ENTROPY
+        value_loss = ((critic_values - returns) ** 2 / 2).mean()
+        total_loss = value_loss + entropy_loss + policy_loss
+        total_loss.backward()
+        self.actor_optimizer.step()
+        self.critic_optimizer.step()
 
     def update(self, transition):
         state, action, next_state, reward, done = transition
+        action = torch.tensor(action)
+        self.states.append(transform_state(state))
+        self.actions.append(action)
+        self.next_states.append(transform_state(next_state))
+        self.rewards.append((reward + 8.1) / 8.1)
+        self.log_probs.append(self.distribution.log_prob(action))
+        self.entropies.append(self.distribution.entropy())
+        self.critic_values.append(self.critic(transform_state(state)))
+        self.target_values.append(self.target(transform_state(state)))
+        if done or len(self.states) == UPDATE_LENGTH:
+            next_target = torch.zeros(1) if done else self.target(self.next_states[-1])
+            if len(self.target_values) > 1:
+                returns = torch.tensor(self.rewards).view(-1, 1) + \
+                          self.gamma * torch.cat((torch.cat(self.target_values[1:]), next_target)).view(-1, 1).detach()
+            else:
+                self.states = []
+                self.actions = []
+                self.next_states = []
+                self.rewards = []
+                self.log_probs = []
+                self.entropies = []
+                self.critic_values = []
+                self.target_values = []
+                return
+
+            self.optimizer_step(
+                torch.cat(self.log_probs).view(-1, 1),
+                torch.cat(self.entropies).view(-1, 1),
+                returns,
+                torch.cat(self.critic_values).view(-1, 1)
+            )
+
+            self.states = []
+            self.actions = []
+            self.next_states = []
+            self.rewards = []
+            self.log_probs = []
+            self.entropies = []
+            self.critic_values = []
+            self.target_values = []
 
     def act(self, state):
         # Remember: agent is not deterministic, sample actions from distribution (e.g. Gaussian)
         state = transform_state(state)
         out = self.actor(state)
-        return np.array([Normal(out[0], out[1]).sample().item()])
+        self.distribution = Normal(out[0], out[1])
+        return np.array([self.distribution.sample().item()])
 
     def save(self, i):
         torch.save(self.actor.state_dict(), f'agent_{i}.pkl')
@@ -41,7 +124,7 @@ if __name__ == "__main__":
 
     scores = []
     best_score = -10000.0
-    best_score_10 = -10000.0
+    best_score_25 = -10000.0
     total_steps = 0
     start = time.time()
 
@@ -85,10 +168,10 @@ if __name__ == "__main__":
             elapsed = end - start
             start = end
             print(f'Elapsed time: {elapsed}')
-        elif (i + 1) % 25 == 0:
-            current_score_10 = np.mean(scores[-10:])
-            print(f'Intermediate score: {current_score_10}')
-            if current_score_10 > best_score_10:
-                best_score_10 = current_score_10
-                a2c.save(10)
-                print(f'Best 10 model saved with score: {best_score_10}')
+        #elif (i + 1) % 25 == 0:
+        #    current_score_25 = np.mean(scores[-25:])
+        #    print(f'Intermediate score: {current_score_25}')
+        #    if current_score_25 > best_score_25:
+        #        best_score_25 = current_score_25
+        #        a2c.save(25)
+        #        print(f'Best 25 model saved with score: {best_score_25}')

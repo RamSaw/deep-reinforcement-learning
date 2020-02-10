@@ -5,6 +5,7 @@ import os
 import torch
 from torch import nn
 from torch.distributions import Normal
+from torch.nn import functional as F
 
 SEED = 423  # 627, 8, 11
 
@@ -26,6 +27,20 @@ def transform_state(state):
     return torch.tensor(state).float()
 
 
+class Actor(nn.Module):
+    def __init__(self, hidden=400, in_dim=3, out_dim=1):
+        super().__init__()
+        self.fc = nn.Linear(in_dim, hidden)
+        self.mu = nn.Linear(hidden, out_dim)
+        self.sigma = nn.Parameter(torch.full((1,), np.log(0.6)), requires_grad=True)
+
+    def forward(self, x):
+        z2 = F.relu(self.fc(x))
+        mu = 2 * F.tanh(self.mu(z2))
+        sigma = self.sigma.expand_as(mu).exp()
+        return mu, sigma
+
+
 class Agent:
     def __init__(self):
         self.actor = Agent.generate_model()
@@ -35,7 +50,7 @@ class Agent:
 
     @staticmethod
     def generate_model():
-        return nn.Linear(3, 2)
+        return Actor()
 
     def act(self, state):
         state = transform_state(state)
