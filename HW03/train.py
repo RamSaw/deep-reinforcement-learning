@@ -14,11 +14,13 @@ from torch.optim import Adam
 
 from HW03.agent import transform_state, Agent
 
-N_STEP = 64
+N_STEP = 1
 GAMMA = 0.9
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 UPDATE_LENGTH = 10
 ENTROPY = 0.01
+TARGET_UPDATE = 800
+EPOSIODE_LEN = 200
 
 
 class Critic(nn.Module):
@@ -48,6 +50,7 @@ class A2C:
         self.entropies = []
         self.critic_values = []
         self.target_values = []
+        self.update_steps = 0
         self.distribution = None
         self.target = deepcopy(self.critic)
 
@@ -64,6 +67,10 @@ class A2C:
         self.critic_optimizer.step()
 
     def update(self, transition):
+        self.update_steps += 1
+        if self.update_steps % TARGET_UPDATE == 0:
+            self.target = deepcopy(self.critic)
+
         state, action, next_state, reward, done = transition
         action = torch.tensor(action)
         self.states.append(transform_state(state))
@@ -137,6 +144,8 @@ if __name__ == "__main__":
         state_buffer = deque(maxlen=N_STEP)
         action_buffer = deque(maxlen=N_STEP)
         while not done:
+            if steps == EPOSIODE_LEN:
+                break
             total_steps += 1
             action = a2c.act(state)
             next_state, reward, done, _ = env.step(action)
