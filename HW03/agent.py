@@ -1,11 +1,10 @@
-import random
-import numpy as np
 import os
+import random
 
+import numpy as np
 import torch
 from torch import nn
 from torch.distributions import Normal
-from torch.nn import functional as F
 
 SEED = 423  # 627, 8, 11
 
