@@ -8,6 +8,8 @@ import numpy as np
 import torch
 import random
 
+from torch.distributions import MultivariateNormal
+
 from HW04.agent import Agent, transform_state
 
 N_STEP = 1
@@ -34,7 +36,10 @@ class PPO:
 
     def act(self, state):
         state = transform_state(state)
-        out = self.actor(state)
+        mu, sigma = self.actor(state)
+        cov_mat = torch.diag(sigma)
+        dist = MultivariateNormal(mu, cov_mat)
+        out = dist.sample()
         return out.detach().cpu().numpy()
 
     def save(self, i):

@@ -4,6 +4,7 @@ import os
 
 import torch
 from torch import nn
+from torch.distributions import MultivariateNormal
 
 SEED = 423  # 627, 8, 11
 
@@ -30,14 +31,17 @@ class Actor(nn.Module):
         super().__init__()
         self.mu_model = nn.Sequential(
             nn.Linear(26, 64),
-            nn.ReLU(),
-            nn.Linear(64, 6),
+            nn.Tanh(),
+            nn.Linear(64, 32),
+            nn.Tanh(),
+            nn.Linear(32, 6),
             nn.Tanh()
         )
+        self.sigma = torch.full((6,), 0.5 * 0.5)
 
     def forward(self, x):
         mu = self.mu_model(x)
-        return mu
+        return mu, self.sigma
 
 
 class Agent:
@@ -53,7 +57,10 @@ class Agent:
 
     def act(self, state):
         state = transform_state(state)
-        out = self.actor(state)
+        mu, sigma = self.actor(state)
+        cov_mat = torch.diag(sigma)
+        dist = MultivariateNormal(mu, cov_mat)
+        out = dist.sample()
         return out.detach().cpu().numpy()
 
     def reset(self):
