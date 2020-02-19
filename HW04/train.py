@@ -30,14 +30,14 @@ class Memory:
     def __init__(self):
         self.actions = []
         self.states = []
-        self.logprobs = []
+        self.log_probs = []
         self.rewards = []
         self.is_terminals = []
 
     def reset(self):
         self.actions = []
         self.states = []
-        self.logprobs = []
+        self.log_probs = []
         self.rewards = []
         self.is_terminals = []
 
@@ -55,32 +55,28 @@ class ActorCritic(nn.Module):
         )
 
     def act(self, state, memory):
-        action_mean, action_var = self.actor(state)
-        cov_mat = torch.diag(action_var)
-
-        dist = MultivariateNormal(action_mean, cov_mat)
-        action = dist.sample()
-        action_logprob = dist.log_prob(action)
+        mu, sigma = self.actor(state)
+        sigma = torch.diag(sigma)
+        dist = MultivariateNormal(mu, sigma)
+        sampled_action = dist.sample()
+        action_log_prob = dist.log_prob(sampled_action)
 
         memory.states.append(state)
-        memory.actions.append(action)
-        memory.logprobs.append(action_logprob)
+        memory.actions.append(sampled_action)
+        memory.log_probs.append(action_log_prob)
 
-        return action.detach()
+        return sampled_action.detach()
 
     def evaluate(self, state, action):
-        action_mean, action_var = self.actor(state)
+        mu, sigma = self.actor(state)
+        sigma = sigma.expand_as(mu)
+        sigma = torch.diag_embed(sigma)
+        dist = MultivariateNormal(mu, sigma)
+        return dist.log_prob(action), dist.entropy(), torch.squeeze(self.critic(state), 1)
 
-        action_var = action_var.expand_as(action_mean)
-        cov_mat = torch.diag_embed(action_var)
 
-        dist = MultivariateNormal(action_mean, cov_mat)
-
-        action_logprobs = dist.log_prob(action)
-        dist_entropy = dist.entropy()
-        state_value = self.critic(state)
-
-        return action_logprobs, torch.squeeze(state_value), dist_entropy
+def normalize(tensor, eps=1e-10):
+    return (tensor - tensor.mean()) / (tensor.std() + eps)
 
 
 class PPO:
@@ -102,24 +98,23 @@ class PPO:
             if is_terminal:
                 discounted_reward = 0
             discounted_reward = reward + (GAMMA * discounted_reward)
-            rewards.insert(0, discounted_reward)
+            rewards.append(discounted_reward)
 
-        rewards = torch.tensor(rewards)
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
+        rewards = normalize(torch.tensor(list(reversed(rewards))))
 
         old_states = torch.stack(memory.states).detach()
         old_actions = torch.stack(memory.actions).detach()
-        old_logprobs = torch.stack(memory.logprobs).detach()
+        old_log_probs = torch.stack(memory.log_probs).detach()
 
         for _ in range(POLICY_UPDATE_ITERATIONS):
-            logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
+            log_probs, entropy, state_values = self.policy.evaluate(old_states, old_actions)
 
-            ratios = torch.exp(logprobs - old_logprobs.detach())
+            ratios = torch.exp(log_probs - old_log_probs.detach())
 
             advantages = rewards - state_values.detach()
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * advantages
-            loss = -torch.min(surr1, surr2) + 0.5 * self.loss_func(state_values, rewards) - 0.01 * dist_entropy
+            loss = -torch.min(surr1, surr2) + 0.5 * self.loss_func(state_values, rewards) - 0.01 * entropy
 
             self.optimizer.zero_grad()
             loss.mean().backward()

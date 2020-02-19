@@ -25,11 +25,11 @@ class Actor(nn.Module):
             nn.Linear(32, 6),
             nn.Tanh()
         )
-        self.action_var = torch.full((6,), 0.5 * 0.5)
+        self.sigma = torch.full((6,), ACTION_STD * ACTION_STD)
 
     def forward(self, x):
         mu = self.actor(x)
-        return mu, self.action_var
+        return mu, self.sigma
 
 
 class Agent:
