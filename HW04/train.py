@@ -15,6 +15,7 @@ GAMMA = 0.9
 CLIP = 0.1
 ENTROPY_COEF = 1e-2
 TRAJECTORY_SIZE = 512
+EPOSIODE_LEN = 1000
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -63,6 +64,8 @@ if __name__ == "__main__":
         steps = 0
         done = False
         while not done:
+            if steps == EPOSIODE_LEN:
+                break
             action = algo.act(state)
             next_state, reward, done, _ = env.step(action)
             total_reward += reward
