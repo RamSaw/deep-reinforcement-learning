@@ -4,7 +4,7 @@ import os
 
 import torch
 from torch import nn
-from torch.distributions import MultivariateNormal
+from torch.distributions import MultivariateNormal, Normal
 
 
 def transform_state(state):
@@ -42,8 +42,7 @@ class Agent:
     def act(self, state):
         state = transform_state(state)
         mu, sigma = self.actor(state)
-        cov_mat = torch.diag(sigma)
-        dist = MultivariateNormal(mu, cov_mat)
+        dist = Normal(mu, sigma)
         out = dist.sample()
         return out.detach().cpu().numpy()
 

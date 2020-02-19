@@ -10,15 +10,14 @@ import torch
 import random
 
 from torch import nn
-from torch.distributions import MultivariateNormal
-
-from HW04.agent import Actor, transform_state
+from torch.distributions import MultivariateNormal, Normal
+from HW04.agent import Actor, transform_state, Agent
 
 GAMMA = 0.99
 CLIP = 0.2
 EPISODES = 10000
 ENTROPY_COEF = 1e-2
-TRAJECTORY_SIZE = 3000  # TODO: change
+TRAJECTORY_SIZE = 3000
 POLICY_UPDATE_ITERATIONS = 80
 VALUE_FUNCTION_LOSS_COEF = 0.5
 EPOSIODE_LEN = 1000
@@ -57,8 +56,7 @@ class ActorCritic(nn.Module):
 
     def act(self, state, memory):
         mu, sigma = self.actor(state)
-        sigma = torch.diag(sigma)
-        dist = MultivariateNormal(mu, sigma)
+        dist = Normal(mu, sigma)
         sampled_action = dist.sample()
         action_log_prob = dist.log_prob(sampled_action)
 
@@ -71,8 +69,7 @@ class ActorCritic(nn.Module):
     def evaluate(self, state, action):
         mu, sigma = self.actor(state)
         sigma = sigma.expand_as(mu)
-        sigma = torch.diag_embed(sigma)
-        dist = MultivariateNormal(mu, sigma)
+        dist = Normal(mu, sigma)
         return dist.log_prob(action), dist.entropy(), torch.squeeze(self.critic(state), 1)
 
 
@@ -113,6 +110,7 @@ class PPO:
             entropy_loss = -entropy * ENTROPY_COEF
             value_loss = VALUE_FUNCTION_LOSS_COEF * self.loss_func(state_values, rewards)
             adv = rewards - state_values.detach()
+            adv = adv.unsqueeze(dim=1)
             ratios = torch.exp(log_probs - old_log_probs.detach())
             policy_loss = -(torch.min(ratios * adv, torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * adv))
             loss = (policy_loss + value_loss + entropy_loss).mean()
