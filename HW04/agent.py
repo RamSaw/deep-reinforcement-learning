@@ -36,7 +36,7 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        mu = 2 * self.mu_model(x)
+        mu = self.mu_model(x)
         return mu
 
 

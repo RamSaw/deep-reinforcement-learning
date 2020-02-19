@@ -2,6 +2,7 @@ import time
 from collections import deque
 
 import pybullet_envs
+import sklearn
 from gym import make
 import numpy as np
 import torch
@@ -55,6 +56,7 @@ if __name__ == "__main__":
     state_buffer = deque()
     action_buffer = deque()
     done_buffer = deque()
+    # env.render()
     for i in range(episodes):
         state = env.reset()
         total_reward = 0
@@ -83,7 +85,6 @@ if __name__ == "__main__":
                 reward_buffer.clear()
                 state_buffer.clear()
                 done_buffer.clear()
-            # env.render()
         scores.append(total_reward)
 
         if (i + 1) % 50 == 0:
