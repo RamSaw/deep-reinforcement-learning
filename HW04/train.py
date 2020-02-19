@@ -47,18 +47,16 @@ class ActorCritic(nn.Module):
         super(ActorCritic, self).__init__()
         self.actor = Actor()
         self.critic = nn.Sequential(
-            nn.Linear(26, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 1)
+            nn.Linear(26, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1)
         )
 
     def act(self, state, memory):
         mu, sigma = self.actor(state)
         dist = Normal(mu, sigma)
         sampled_action = dist.sample()
-        action_log_prob = dist.log_prob(sampled_action)
+        action_log_prob = dist.log_prob(sampled_action).sum(dim=-1)
 
         memory.states.append(state)
         memory.actions.append(sampled_action)
@@ -70,7 +68,7 @@ class ActorCritic(nn.Module):
         mu, sigma = self.actor(state)
         sigma = sigma.expand_as(mu)
         dist = Normal(mu, sigma)
-        return dist.log_prob(action), dist.entropy(), torch.squeeze(self.critic(state), 1)
+        return dist.log_prob(action).sum(dim=-1), dist.entropy().sum(dim=-1), torch.squeeze(self.critic(state), 1)
 
 
 def normalize(tensor, eps=1e-10):
@@ -110,7 +108,6 @@ class PPO:
             entropy_loss = -entropy * ENTROPY_COEF
             value_loss = VALUE_FUNCTION_LOSS_COEF * self.loss_func(state_values, rewards)
             adv = rewards - state_values.detach()
-            adv = adv.unsqueeze(dim=1)
             ratios = torch.exp(log_probs - old_log_probs.detach())
             policy_loss = -(torch.min(ratios * adv, torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * adv))
             loss = (policy_loss + value_loss + entropy_loss).mean()

@@ -18,18 +18,15 @@ class Actor(nn.Module):
     def __init__(self):
         super().__init__()
         self.actor = nn.Sequential(
-            nn.Linear(26, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 6),
-            nn.Tanh()
+            nn.Linear(26, 256),
+            nn.ReLU(),
+            nn.Linear(256, 6),
         )
-        self.sigma = torch.full((6,), ACTION_STD * ACTION_STD)
+        self.sigma = nn.Parameter(torch.zeros(6))
 
     def forward(self, x):
         mu = self.actor(x)
-        return mu, self.sigma
+        return mu, self.sigma.exp()
 
 
 class Agent:
