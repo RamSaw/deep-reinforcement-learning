@@ -20,6 +20,7 @@ EPISODES = 10000
 ENTROPY_COEF = 1e-2
 TRAJECTORY_SIZE = 3000  # TODO: change
 POLICY_UPDATE_ITERATIONS = 80
+VALUE_FUNCTION_LOSS_COEF = 0.5
 EPOSIODE_LEN = 1000
 BETAS = (0.9, 0.999)
 LR = 0.0003
@@ -87,7 +88,7 @@ class PPO:
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.loss_func = nn.MSELoss()
 
-    def select_action(self, state, memory):
+    def act(self, state, memory):
         state = transform_state(state)
         return self.policy_old.act(state, memory).numpy()
 
@@ -109,17 +110,16 @@ class PPO:
         for _ in range(POLICY_UPDATE_ITERATIONS):
             log_probs, entropy, state_values = self.policy.evaluate(old_states, old_actions)
 
+            entropy_loss = -entropy * ENTROPY_COEF
+            value_loss = VALUE_FUNCTION_LOSS_COEF * self.loss_func(state_values, rewards)
+            adv = rewards - state_values.detach()
             ratios = torch.exp(log_probs - old_log_probs.detach())
-
-            advantages = rewards - state_values.detach()
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * advantages
-            loss = -torch.min(surr1, surr2) + 0.5 * self.loss_func(state_values, rewards) - 0.01 * entropy
+            policy_loss = -(torch.min(ratios * adv, torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * adv))
+            loss = (policy_loss + value_loss + entropy_loss).mean()
 
             self.optimizer.zero_grad()
-            loss.mean().backward()
+            loss.backward()
             self.optimizer.step()
-
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     def save(self, i):
@@ -154,7 +154,7 @@ if __name__ == "__main__":
         while not done:
             if steps == EPOSIODE_LEN:
                 break
-            action = algo.select_action(state, memory)
+            action = algo.act(state, memory)
             state, reward, done, _ = env.step(action)
             total_reward += reward
             steps += 1
