@@ -6,22 +6,6 @@ import torch
 from torch import nn
 from torch.distributions import MultivariateNormal
 
-SEED = 453  # 627, 8, 11
-
-
-def make_reproducible(seed, make_cuda_reproducible):
-    pass
-    #random.seed(seed)
-    #os.environ['PYTHONHASHSEED'] = str(seed)
-    #np.random.seed(seed)
-    #torch.manual_seed(seed)
-    #if make_cuda_reproducible:
-    #    torch.backends.cudnn.deterministic = True
-    #    torch.backends.cudnn.benchmark = False
-
-
-make_reproducible(SEED, make_cuda_reproducible=False)
-
 
 def transform_state(state):
     return torch.tensor(state).float()

@@ -1,3 +1,4 @@
+import os
 import time
 from collections import deque
 
@@ -22,7 +23,7 @@ POLICY_UPDATE_ITERATIONS = 80
 EPOSIODE_LEN = 1000
 BETAS = (0.9, 0.999)
 LR = 0.0003
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+SEED = 5
 
 
 class Memory:
@@ -33,18 +34,17 @@ class Memory:
         self.rewards = []
         self.is_terminals = []
 
-    def clear_memory(self):
-        del self.actions[:]
-        del self.states[:]
-        del self.logprobs[:]
-        del self.rewards[:]
-        del self.is_terminals[:]
+    def reset(self):
+        self.actions = []
+        self.states = []
+        self.logprobs = []
+        self.rewards = []
+        self.is_terminals = []
 
 
 class ActorCritic(nn.Module):
     def __init__(self):
         super(ActorCritic, self).__init__()
-        # critic
         self.actor = Actor()
         self.critic = nn.Sequential(
             nn.Linear(26, 64),
@@ -56,7 +56,7 @@ class ActorCritic(nn.Module):
 
     def act(self, state, memory):
         action_mean, action_var = self.actor(state)
-        cov_mat = torch.diag(action_var).to(DEVICE)
+        cov_mat = torch.diag(action_var)
 
         dist = MultivariateNormal(action_mean, cov_mat)
         action = dist.sample()
@@ -72,7 +72,7 @@ class ActorCritic(nn.Module):
         action_mean, action_var = self.actor(state)
 
         action_var = action_var.expand_as(action_mean)
-        cov_mat = torch.diag_embed(action_var).to(DEVICE)
+        cov_mat = torch.diag_embed(action_var)
 
         dist = MultivariateNormal(action_mean, cov_mat)
 
@@ -85,20 +85,17 @@ class ActorCritic(nn.Module):
 
 class PPO:
     def __init__(self):
-        self.policy = ActorCritic().to(DEVICE)
+        self.policy = ActorCritic()
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=LR, betas=BETAS)
-
-        self.policy_old = ActorCritic().to(DEVICE)
+        self.policy_old = ActorCritic()
         self.policy_old.load_state_dict(self.policy.state_dict())
-
-        self.MseLoss = nn.MSELoss()
+        self.loss_func = nn.MSELoss()
 
     def select_action(self, state, memory):
-        state = torch.FloatTensor(state.reshape(1, -1)).to(DEVICE)
+        state = torch.FloatTensor(state.reshape(1, -1))
         return self.policy_old.act(state, memory).cpu().data.numpy().flatten()
 
     def update(self, memory):
-        # Monte Carlo estimate of rewards:
         rewards = []
         discounted_reward = 0
         for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)):
@@ -107,35 +104,27 @@ class PPO:
             discounted_reward = reward + (GAMMA * discounted_reward)
             rewards.insert(0, discounted_reward)
 
-        # Normalizing the rewards:
-        rewards = torch.tensor(rewards).to(DEVICE)
+        rewards = torch.tensor(rewards)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
 
-        # convert list to tensor
-        old_states = torch.squeeze(torch.stack(memory.states).to(DEVICE), 1).detach()
-        old_actions = torch.squeeze(torch.stack(memory.actions).to(DEVICE), 1).detach()
-        old_logprobs = torch.squeeze(torch.stack(memory.logprobs), 1).to(DEVICE).detach()
+        old_states = torch.squeeze(torch.stack(memory.states), 1).detach()
+        old_actions = torch.squeeze(torch.stack(memory.actions), 1).detach()
+        old_logprobs = torch.squeeze(torch.stack(memory.logprobs), 1).detach()
 
-        # Optimize policy for K epochs:
         for _ in range(POLICY_UPDATE_ITERATIONS):
-            # Evaluating old actions and values :
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
 
-            # Finding the ratio (pi_theta / pi_theta__old):
             ratios = torch.exp(logprobs - old_logprobs.detach())
 
-            # Finding Surrogate Loss:
             advantages = rewards - state_values.detach()
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - CLIP, 1 + CLIP) * advantages
-            loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, rewards) - 0.01 * dist_entropy
+            loss = -torch.min(surr1, surr2) + 0.5 * self.loss_func(state_values, rewards) - 0.01 * dist_entropy
 
-            # take gradient step
             self.optimizer.zero_grad()
             loss.mean().backward()
             self.optimizer.step()
 
-        # Copy new weights into old policy:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
     def save(self, i):
@@ -145,12 +134,11 @@ class PPO:
 if __name__ == "__main__":
     env = make("HalfCheetahBulletEnv-v0")
 
-    random_seed = 5
-    if random_seed:
-        print("Random Seed: {}".format(random_seed))
-        torch.manual_seed(random_seed)
-        env.seed(random_seed)
-        np.random.seed(random_seed)
+    random.seed(SEED)
+    os.environ['PYTHONHASHSEED'] = str(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    env.seed(SEED)
 
     memory = Memory()
     algo = PPO()
@@ -181,7 +169,7 @@ if __name__ == "__main__":
 
             if len(memory.rewards) == TRAJECTORY_SIZE:
                 algo.update(memory)
-                memory.clear_memory()
+                memory.reset()
 
         scores.append(total_reward)
 
