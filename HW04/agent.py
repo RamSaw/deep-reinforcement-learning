@@ -6,17 +6,18 @@ import torch
 from torch import nn
 from torch.distributions import MultivariateNormal
 
-SEED = 423  # 627, 8, 11
+SEED = 453  # 627, 8, 11
 
 
 def make_reproducible(seed, make_cuda_reproducible):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if make_cuda_reproducible:
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+    pass
+    #random.seed(seed)
+    #os.environ['PYTHONHASHSEED'] = str(seed)
+    #np.random.seed(seed)
+    #torch.manual_seed(seed)
+    #if make_cuda_reproducible:
+    #    torch.backends.cudnn.deterministic = True
+    #    torch.backends.cudnn.benchmark = False
 
 
 make_reproducible(SEED, make_cuda_reproducible=False)
@@ -29,7 +30,7 @@ def transform_state(state):
 class Actor(nn.Module):
     def __init__(self):
         super().__init__()
-        self.mu_model = nn.Sequential(
+        self.actor = nn.Sequential(
             nn.Linear(26, 64),
             nn.Tanh(),
             nn.Linear(64, 32),
@@ -37,11 +38,19 @@ class Actor(nn.Module):
             nn.Linear(32, 6),
             nn.Tanh()
         )
-        self.sigma = torch.full((6,), 0.5 * 0.5)
+        # critic
+        self.critic = nn.Sequential(
+            nn.Linear(26, 64),
+            nn.Tanh(),
+            nn.Linear(64, 32),
+            nn.Tanh(),
+            nn.Linear(32, 1)
+        )
+        self.action_var = torch.full((6,), 0.5 * 0.5)
 
     def forward(self, x):
-        mu = self.mu_model(x)
-        return mu, self.sigma
+            mu = self.actor(x)
+            return mu, self.action_var
 
 
 class Agent:
