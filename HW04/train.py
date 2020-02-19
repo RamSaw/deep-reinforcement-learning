@@ -12,7 +12,7 @@ import random
 from torch import nn
 from torch.distributions import MultivariateNormal
 
-from HW04.agent import Actor
+from HW04.agent import Actor, transform_state
 
 GAMMA = 0.99
 CLIP = 0.2
@@ -92,8 +92,8 @@ class PPO:
         self.loss_func = nn.MSELoss()
 
     def select_action(self, state, memory):
-        state = torch.FloatTensor(state.reshape(1, -1))
-        return self.policy_old.act(state, memory).cpu().data.numpy().flatten()
+        state = transform_state(state)
+        return self.policy_old.act(state, memory).numpy()
 
     def update(self, memory):
         rewards = []
@@ -107,9 +107,9 @@ class PPO:
         rewards = torch.tensor(rewards)
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5)
 
-        old_states = torch.squeeze(torch.stack(memory.states), 1).detach()
-        old_actions = torch.squeeze(torch.stack(memory.actions), 1).detach()
-        old_logprobs = torch.squeeze(torch.stack(memory.logprobs), 1).detach()
+        old_states = torch.stack(memory.states).detach()
+        old_actions = torch.stack(memory.actions).detach()
+        old_logprobs = torch.stack(memory.logprobs).detach()
 
         for _ in range(POLICY_UPDATE_ITERATIONS):
             logprobs, state_values, dist_entropy = self.policy.evaluate(old_states, old_actions)
