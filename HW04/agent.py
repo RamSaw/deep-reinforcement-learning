@@ -27,6 +27,9 @@ def transform_state(state):
     return torch.tensor(state).float()
 
 
+ACTION_STD = 0.5
+
+
 class Actor(nn.Module):
     def __init__(self):
         super().__init__()
@@ -38,31 +41,19 @@ class Actor(nn.Module):
             nn.Linear(32, 6),
             nn.Tanh()
         )
-        # critic
-        self.critic = nn.Sequential(
-            nn.Linear(26, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 1)
-        )
         self.action_var = torch.full((6,), 0.5 * 0.5)
 
     def forward(self, x):
-            mu = self.actor(x)
-            return mu, self.action_var
+        mu = self.actor(x)
+        return mu, self.action_var
 
 
 class Agent:
     def __init__(self):
-        self.actor = Agent.generate_model()
+        self.actor = Actor()
         self.actor.load_state_dict(torch.load(__file__[:-8] + "/agent.pkl"))
         self.actor.to(torch.device("cpu"))
         self.actor.eval()
-
-    @staticmethod
-    def generate_model():
-        return Actor()
 
     def act(self, state):
         state = transform_state(state)

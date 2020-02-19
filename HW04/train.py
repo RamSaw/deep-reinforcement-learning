@@ -11,9 +11,8 @@ import random
 from torch import nn
 from torch.distributions import MultivariateNormal
 
-from HW04.agent import Agent, transform_state
+from HW04.agent import Actor
 
-ACTION_STD = 0.5
 GAMMA = 0.99
 CLIP = 0.2
 EPISODES = 10000
@@ -45,16 +44,8 @@ class Memory:
 class ActorCritic(nn.Module):
     def __init__(self):
         super(ActorCritic, self).__init__()
-        # action mean range -1 to 1
-        self.actor = nn.Sequential(
-            nn.Linear(26, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 6),
-            nn.Tanh()
-        )
         # critic
+        self.actor = Actor()
         self.critic = nn.Sequential(
             nn.Linear(26, 64),
             nn.Tanh(),
@@ -62,11 +53,10 @@ class ActorCritic(nn.Module):
             nn.Tanh(),
             nn.Linear(32, 1)
         )
-        self.action_var = torch.full((6,), ACTION_STD * ACTION_STD).to(DEVICE)
 
     def act(self, state, memory):
-        action_mean = self.actor(state)
-        cov_mat = torch.diag(self.action_var).to(DEVICE)
+        action_mean, action_var = self.actor(state)
+        cov_mat = torch.diag(action_var).to(DEVICE)
 
         dist = MultivariateNormal(action_mean, cov_mat)
         action = dist.sample()
@@ -79,9 +69,9 @@ class ActorCritic(nn.Module):
         return action.detach()
 
     def evaluate(self, state, action):
-        action_mean = self.actor(state)
+        action_mean, action_var = self.actor(state)
 
-        action_var = self.action_var.expand_as(action_mean)
+        action_var = action_var.expand_as(action_mean)
         cov_mat = torch.diag_embed(action_var).to(DEVICE)
 
         dist = MultivariateNormal(action_mean, cov_mat)
